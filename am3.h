@@ -13,6 +13,11 @@ enum am3_func_type {
 	AM3_COMP
 };
 
+enum am3_opcodes {
+	AM3_STACK_BOTTOM,
+	AM3_FUNC_END
+};
+
 typedef struct am3_env {
 	struct am3_env *up;
 	Nit_hmap *dict;
@@ -35,14 +40,15 @@ typedef struct {
 
 typedef struct {
 	Nit_list list;
-	Am3_clos *clos;
-} Am3_clist;
+	Am3_env *env;
+} Am3_elist;
 
 typedef struct {
-	Am3_clist *clist;
-	Nit_gap stack;
+	Am3_elist *elist;
+	Nit_gap data;
+	Nit_gap code;
 } Am3_tsan;
 
 int
-am3_eval_word(Am3_word word, Am3_tsan *tsan);
+am3_apply_word(Am3_word word, Am3_tsan *tsan);
 
