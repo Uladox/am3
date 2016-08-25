@@ -17,6 +17,31 @@
 #define DEFAULT_CONTI_DATA_SIZE 1024
 #define DEFAULT_ENV_SEQUENCE 0
 
+static int
+func_hmap_compare(const void *entry_key, uint32_t entry_key_size,
+		  const void *key, uint32_t key_size);
+
+static void
+func_hmap_free(void *key, void *storage);
+
+/* env */
+
+Am3_env *
+am3_env_new(Am3_env *up)
+{
+	Am3_env *env = palloc(env);
+
+	pcheck(env, NULL);
+	env->dict = hmap_new(DEFAULT_ENV_SEQUENCE,
+			    func_hmap_compare, func_hmap_free);
+	pcheck_c(env->dict, NULL, free(env));
+	env->up = up;
+	env->refs = 1;
+
+	return env;
+}
+
+
 void
 am3_env_release(Am3_env *env)
 {
@@ -27,22 +52,13 @@ am3_env_release(Am3_env *env)
 	am3_env_release(env->up);
 }
 
-void
-am3_func_release(Am3_func *func)
+Am3_func *
+am3_env_get_func(Am3_word word, const Am3_env *env)
 {
-	if (--func->refs)
-		return;
-
-	switch (func->type) {
-	case AM3_PRIM:
-		free(func);
-		return;
-	case AM3_COMP:
-		gap_dispose(&func->val.clos.words);
-		am3_env_release(func->val.clos.env);
-		return;
-	}
+	return am3_dict_get(word, env->dict);
 }
+
+/* func */
 
 static int
 func_hmap_compare(const void *entry_key, uint32_t entry_key_size,
@@ -61,19 +77,52 @@ func_hmap_free(void *key, void *storage)
 	am3_func_release(storage);
 }
 
-Am3_env *
-am3_env_new(Am3_env *up)
+void
+am3_func_release(Am3_func *func)
 {
-	Am3_env *env = palloc(env);
+	if (--func->refs)
+		return;
 
-	pcheck(env, NULL);
-	env->dict = hmap_new(DEFAULT_ENV_SEQUENCE,
-			    func_hmap_compare, func_hmap_free);
-	pcheck_c(env->dict, NULL, free(env));
-	env->up = up;
-	env->refs = 1;
+	am3_env_release(func->env);
 
-	return env;
+	switch (func->type) {
+	case AM3_PRIM:
+		break;
+	case AM3_CLOS:
+		gap_dispose(func->val.words);
+		free(func->val.words);
+	        break;
+	case AM3_CONTI:
+		am3_conti_free(func->val.conti);
+		break;
+	}
+		free(func);
+}
+
+Am3_func *
+am3_func_get_func(Am3_word word, const Am3_func *func)
+{
+	return am3_env_get_func(word, func->env);
+}
+
+/* conti */
+
+static void
+am3_elist_free(Am3_elist *elist)
+{
+	Am3_elist *tmp;
+
+	delayed_foreach (tmp, elist) {
+		am3_env_release(tmp->env);
+		free(tmp);
+	}
+}
+
+static void
+am3_elist_inc_refs(Am3_elist *elist)
+{
+	foreach (elist)
+		++elist->env->refs;
 }
 
 Am3_conti *
@@ -110,41 +159,11 @@ am3_conti_new(Am3_env *env)
 void
 am3_conti_free(Am3_conti *conti)
 {
-	Am3_elist *elist = conti->elist;
-	Am3_elist *tmp;
 
-	delayed_foreach(tmp, elist) {
-		am3_env_release(tmp->env);
-		free(tmp);
-	}
-
+	am3_elist_free(conti->elist);
 	gap_dispose(&conti->code);
 	gap_dispose(&conti->data);
 	free(conti);
-}
-
-int
-am3_word_write(Am3_word word, Nit_gap *gap)
-{
-	return gap_write(gap, &word, sizeof(word));
-}
-
-Am3_func *
-am3_dict_get(Am3_word word, const Nit_hmap *map)
-{
-	return hmap_get(map, &word, sizeof(word));
-}
-
-Am3_func *
-am3_env_get_func(Am3_word word, const Am3_env *env)
-{
-	return am3_dict_get(word, env->dict);
-}
-
-Am3_func *
-am3_clos_get_func(Am3_word word, const Am3_clos *clos)
-{
-	return am3_env_get_func(word, clos->env);
 }
 
 Am3_func *
@@ -161,26 +180,6 @@ am3_conti_get_func(Am3_word word, const Am3_conti *conti)
 				return value;
 
 	return value;
-}
-
-void
-am3_print_stack(Nit_gap *stack)
-{
-	int count = 0;
-	int val = stack->start / sizeof(Am3_word);
-
-	printf("#stack{ ");
-
-	for (; count < val; ++count)
-		printf("[%" PRIu32 "] ", ((Am3_word *) stack->bytes)[count]);
-
-	count = stack->end + 1;
-	val = stack->size;
-
-	for (; count < val; ++count)
-		printf("[%" PRIu32 "] ", ((Am3_word *) stack->bytes)[count]);
-
-	printf("}\n");
 }
 
 int
@@ -206,20 +205,63 @@ am3_conti_apply_word(Am3_word word, Am3_conti *conti)
 
 	switch (func->type) {
 	case AM3_PRIM:
-		return func->val.c_func(&conti->data);
-	case AM3_COMP:
+		return func->val.c_func(func, &conti->data);
+	case AM3_CLOS:
 		elist = palloc(elist);
 		pcheck(elist, 1);
-		elist->env = func->val.clos.env;
+		elist->env = func->env;
 		++elist->env->refs;
 		LIST_CONS(elist, conti->elist);
 
 		pcheck_c(am3_word_write(AM3_FUNC_END, &conti->code) ||
-			 gap_gap_put(&conti->code, &func->val.clos.words),
+			 gap_gap_put(&conti->code, func->val.words),
 			 1, free(elist));
 		conti->elist = elist;
+		return 0;
+	case AM3_CONTI:
+		if (gap_replicate(&conti->code, &func->val.conti->code))
+			return 1;
+
+		if (gap_replicate(&conti->data, &func->val.conti->data))
+			return 1;
+
+		am3_elist_free(conti->elist);
+		am3_elist_inc_refs(conti->elist = func->val.conti->elist);
+		return 0;
 	}
 
 	return 0;
 }
 
+/* other */
+int
+am3_word_write(Am3_word word, Nit_gap *gap)
+{
+	return gap_write(gap, &word, sizeof(word));
+}
+
+void
+am3_print_stack(Nit_gap *stack)
+{
+	int count = 0;
+	int val = stack->start / sizeof(Am3_word);
+
+	printf("#stack{ ");
+
+	for (; count < val; ++count)
+		printf("[%" PRIu32 "] ", ((Am3_word *) stack->bytes)[count]);
+
+	count = stack->end + 1;
+	val = stack->size;
+
+	for (; count < val; ++count)
+		printf("[%" PRIu32 "] ", ((Am3_word *) stack->bytes)[count]);
+
+	printf("}\n");
+}
+
+Am3_func *
+am3_dict_get(Am3_word word, const Nit_hmap *map)
+{
+	return hmap_get(map, &word, sizeof(word));
+}
