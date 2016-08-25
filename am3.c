@@ -125,6 +125,18 @@ am3_elist_inc_refs(Am3_elist *elist)
 		++elist->env->refs;
 }
 
+static Am3_elist *
+am3_elist_copy(Am3_elist *elist)
+{
+	Am3_elist *new;
+
+	foreach (elist) {
+		new = palloc(new);
+		new->env = elist->env;
+		++new->env->refs;
+	}
+}
+
 Am3_conti *
 am3_conti_new(Am3_env *env)
 {
