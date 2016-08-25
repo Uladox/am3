@@ -12,12 +12,12 @@
 int
 main(int argc, char *argv[])
 {
-	Am3_tsan *tsan = am3_tsan_new(NULL);
+	Am3_conti *conti = am3_conti_new(NULL);
 
 
 
-	am3_word_write(123456, &tsan->data);
-	am3_word_write(9076126, &tsan->data);
-	am3_apply_word(AM3_STACK_PRINT, tsan);
-	am3_tsan_free(tsan);
+	am3_word_write(123456, &conti->data);
+	am3_word_write(9076126, &conti->data);
+	am3_conti_apply_word(AM3_STACK_PRINT, conti);
+	am3_conti_free(conti);
 }

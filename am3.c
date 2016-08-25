@@ -13,8 +13,8 @@
 
 #include "am3.h"
 
-#define DEFAULT_TSAN_CODE_SIZE 1024
-#define DEFAULT_TSAN_DATA_SIZE 1024
+#define DEFAULT_CONTI_CODE_SIZE 1024
+#define DEFAULT_CONTI_DATA_SIZE 1024
 #define DEFAULT_ENV_SEQUENCE 0
 
 void
@@ -76,41 +76,41 @@ am3_env_new(Am3_env *up)
 	return env;
 }
 
-Am3_tsan *
-am3_tsan_new(Am3_env *env)
+Am3_conti *
+am3_conti_new(Am3_env *env)
 {
-	Am3_tsan *tsan = palloc(tsan);
+	Am3_conti *conti = palloc(conti);
 
-	pcheck(tsan, NULL);
+	pcheck(conti, NULL);
 
-	if (gap_init(&tsan->code, DEFAULT_TSAN_CODE_SIZE)) {
-		free(tsan);
+	if (gap_init(&conti->code, DEFAULT_CONTI_CODE_SIZE)) {
+		free(conti);
 		return NULL;
 	}
 
-        if (gap_init(&tsan->data, DEFAULT_TSAN_DATA_SIZE)) {
-		gap_dispose(&tsan->code);
-		free(tsan);
+        if (gap_init(&conti->data, DEFAULT_CONTI_DATA_SIZE)) {
+		gap_dispose(&conti->code);
+		free(conti);
 		return NULL;
 	}
 
-	pcheck_c((tsan->elist = palloc(tsan->elist)), NULL,
-		 (gap_dispose(&tsan->data),
-		  gap_dispose(&tsan->code), free(tsan)));
+	pcheck_c((conti->elist = palloc(conti->elist)), NULL,
+		 (gap_dispose(&conti->data),
+		  gap_dispose(&conti->code), free(conti)));
 
-	tsan->elist->env = env;
-	LIST_CONS(tsan->elist, NULL);
+	conti->elist->env = env;
+	LIST_CONS(conti->elist, NULL);
 
 	if (env)
 		++env->refs;
 
-	return tsan;
+	return conti;
 }
 
 void
-am3_tsan_free(Am3_tsan *tsan)
+am3_conti_free(Am3_conti *conti)
 {
-	Am3_elist *elist = tsan->elist;
+	Am3_elist *elist = conti->elist;
 	Am3_elist *tmp;
 
 	delayed_foreach(tmp, elist) {
@@ -118,9 +118,9 @@ am3_tsan_free(Am3_tsan *tsan)
 		free(tmp);
 	}
 
-	gap_dispose(&tsan->code);
-	gap_dispose(&tsan->data);
-	free(tsan);
+	gap_dispose(&conti->code);
+	gap_dispose(&conti->data);
+	free(conti);
 }
 
 int
@@ -135,23 +135,23 @@ am3_dict_get(Am3_word word, const Nit_hmap *map)
 	return hmap_get(map, &word, sizeof(word));
 }
 
-static inline Am3_func *
+Am3_func *
 am3_env_get_func(Am3_word word, const Am3_env *env)
 {
 	return am3_dict_get(word, env->dict);
 }
 
-static inline Am3_func *
+Am3_func *
 am3_clos_get_func(Am3_word word, const Am3_clos *clos)
 {
 	return am3_env_get_func(word, clos->env);
 }
 
 Am3_func *
-am3_tsan_get_func(Am3_word word, const Am3_tsan *tsan)
+am3_conti_get_func(Am3_word word, const Am3_conti *conti)
 {
 
-	const Am3_elist *dynam = tsan->elist;
+	const Am3_elist *dynam = conti->elist;
 	const Am3_env *lex;
 	Am3_func *value = NULL;
 
@@ -184,7 +184,7 @@ am3_print_stack(Nit_gap *stack)
 }
 
 int
-am3_apply_word(Am3_word word, Am3_tsan *tsan)
+am3_conti_apply_word(Am3_word word, Am3_conti *conti)
 {
 
 	Am3_func *func;
@@ -192,32 +192,32 @@ am3_apply_word(Am3_word word, Am3_tsan *tsan)
 
 	switch (word) {
 	case AM3_FUNC_END:
-		elist = tsan->elist;
-		tsan->elist = LIST_NEXT(elist);
+		elist = conti->elist;
+		conti->elist = LIST_NEXT(elist);
 		am3_env_release(elist->env);
 		free(elist);
 		return 0;
 	case AM3_STACK_PRINT:
-		am3_print_stack(&tsan->data);
+		am3_print_stack(&conti->data);
 		return 0;
 	}
 
-	pcheck((func = am3_tsan_get_func(word, tsan)), 1);
+	pcheck((func = am3_conti_get_func(word, conti)), 1);
 
 	switch (func->type) {
 	case AM3_PRIM:
-		return func->val.c_func(&tsan->data);
+		return func->val.c_func(&conti->data);
 	case AM3_COMP:
 		elist = palloc(elist);
 		pcheck(elist, 1);
 		elist->env = func->val.clos.env;
 		++elist->env->refs;
-		LIST_CONS(elist, tsan->elist);
+		LIST_CONS(elist, conti->elist);
 
-		pcheck_c(am3_word_write(AM3_FUNC_END, &tsan->code) ||
-			 gap_gap_put(&tsan->code, &func->val.clos.words),
+		pcheck_c(am3_word_write(AM3_FUNC_END, &conti->code) ||
+			 gap_gap_put(&conti->code, &func->val.clos.words),
 			 1, free(elist));
-		tsan->elist = elist;
+		conti->elist = elist;
 	}
 
 	return 0;

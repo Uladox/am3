@@ -48,32 +48,51 @@ typedef struct {
 	Am3_elist *elist;
 	Nit_gap data;
 	Nit_gap code;
-} Am3_tsan;
+} Am3_conti;
 
-/* Am3_env * */
-/* am3_env_new(Am3_env *up); */
+/* env */
 
-Am3_tsan *
-am3_tsan_new(Am3_env *env);
+Am3_env *
+am3_env_new(Am3_env *up);
 
 void
-am3_tsan_free(Am3_tsan *tsan);
+am3_env_release(Am3_env *env);
 
-/* void */
-/* am3_env_release(Am3_env *env); */
+Am3_func *
+am3_env_get_func(Am3_word word, const Am3_env *env);
 
-/* void */
-/* am3_func_release(Am3_func *func); */
+/* clos */
+
+Am3_func *
+am3_clos_get_func(Am3_word word, const Am3_clos *clos);
+
+/* func */
+
+void
+am3_func_release(Am3_func *func);
+
+/* conti */
+
+Am3_conti *
+am3_conti_new(Am3_env *env);
+
+void
+am3_conti_free(Am3_conti *conti);
+
+Am3_func *
+am3_conti_get_func(Am3_word word, const Am3_conti *conti);
+
+int
+am3_conti_apply_word(Am3_word word, Am3_conti *conti);
+
+/* other */
 
 int
 am3_word_write(Am3_word word, Nit_gap *gap);
 
-/* Am3_func * */
-/* am3_dict_get(Am3_word word, const Nit_hmap *map); */
+void
+am3_print_stack(Nit_gap *stack);
 
-/* Am3_func * */
-/* am3_tsan_get_func(Am3_word word, const Am3_tsan *tsan); */
-
-int
-am3_apply_word(Am3_word word, Am3_tsan *tsan);
+Am3_func *
+am3_dict_get(Am3_word word, const Nit_hmap *map);
 
