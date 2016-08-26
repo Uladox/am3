@@ -58,6 +58,22 @@ am3_env_get_func(const Am3_env *env, Am3_word word)
 	return am3_dict_get(env->dict, word);
 }
 
+/* clos */
+
+void
+am3_clos_free(Am3_clos *clos)
+{
+	gap_dispose(&clos->words);
+	am3_env_release(clos->env);
+	free(clos);
+}
+
+Am3_func *
+am3_clos_get_func(const Am3_clos *clos, Am3_word word)
+{
+	return am3_env_get_func(clos->env, word);
+}
+
 /* conti */
 
 static void
@@ -161,17 +177,17 @@ am3_conti_get_func(const Am3_conti *conti, Am3_word word)
 }
 
 int
-am3_conti_apply_clos(Am3_conti *conti, const Am3_func *func)
+am3_conti_apply_clos(Am3_conti *conti, const Am3_clos *clos)
 {
 	Am3_elist *elist = palloc(elist);
 
 	pcheck(elist, 1);
-	elist->env = func->env;
+	elist->env = clos->env;
 	++elist->env->refs;
 	LIST_CONS(elist, conti->elist);
 
 	pcheck_c(am3_word_write(&conti->code, AM3_FUNC_END) ||
-		 gap_gap_put(&conti->code, func->val.words),
+		 gap_gap_put(&conti->code, &clos->words),
 		 1, free(elist));
 	conti->elist = elist;
 
@@ -220,7 +236,7 @@ am3_conti_apply_word(Am3_conti *conti, Am3_word word)
 	case AM3_PRIM:
 		return func->val.c_func(func, &conti->data);
 	case AM3_CLOS:
-		return am3_conti_apply_clos(conti, func);
+		return am3_conti_apply_clos(conti, func->val.clos);
 	case AM3_CONTI:
 		return am3_conti_apply_conti(conti, func->val.conti);
 	}
@@ -256,26 +272,33 @@ am3_func_release(Am3_func *func)
 	if (--func->refs)
 		return;
 
-	am3_env_release(func->env);
-
 	switch (func->type) {
 	case AM3_PRIM:
 		break;
 	case AM3_CLOS:
-		gap_dispose(func->val.words);
-		free(func->val.words);
+		am3_clos_free(func->val.clos);
 	        break;
 	case AM3_CONTI:
 		am3_conti_free(func->val.conti);
 		break;
 	}
-		free(func);
+
+	free(func);
 }
 
 Am3_func *
 am3_func_get_func(const Am3_func *func, Am3_word word)
 {
-	return am3_env_get_func(func->env, word);
+	switch (func->type) {
+	case AM3_PRIM:
+		return NULL;
+	case AM3_CLOS:
+		return am3_clos_get_func(func->val.clos, word);
+	case AM3_CONTI:
+		return am3_conti_get_func(func->val.conti, word);
+	}
+
+	return NULL;
 }
 
 /* other */

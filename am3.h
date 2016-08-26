@@ -21,6 +21,11 @@ typedef struct am3_env {
 } Am3_env;
 
 typedef struct {
+	Am3_env *env;
+	Nit_gap words;
+} Am3_clos;
+
+typedef struct {
 	Nit_list list;
 	Am3_env *env;
 } Am3_elist;
@@ -39,11 +44,10 @@ enum am3_func_type {
 
 typedef struct am3_func {
 	enum am3_func_type type;
-	Am3_env *env;
 	int refs;
 	union {
 		int (*c_func)(struct am3_func *func, Nit_gap *stack);
-	        Nit_gap *words;
+		Am3_clos *clos;
 		Am3_conti *conti;
 	} val;
 } Am3_func;
@@ -59,6 +63,14 @@ am3_env_release(Am3_env *env);
 Am3_func *
 am3_env_get_func(const Am3_env *env, Am3_word word);
 
+/* clos */
+
+void
+am3_clos_free(Am3_clos *clos);
+
+Am3_func *
+am3_clos_get_func(const Am3_clos *clos, Am3_word word)
+
 /* conti */
 
 Am3_conti *
@@ -71,7 +83,7 @@ Am3_func *
 am3_conti_get_func(const Am3_conti *conti, Am3_word word);
 
 int
-am3_conti_apply_clos(Am3_conti *conti, const Am3_func *func);
+am3_conti_apply_clos(Am3_conti *conti, const Am3_clos *clos);
 
 int
 am3_conti_apply_conti(Am3_conti *des, const Am3_conti *src);
