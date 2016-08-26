@@ -57,7 +57,7 @@ void
 am3_env_release(Am3_env *env);
 
 Am3_func *
-am3_env_get_func(Am3_word word, const Am3_env *env);
+am3_env_get_func(const Am3_env *env, Am3_word word);
 
 /* conti */
 
@@ -68,10 +68,16 @@ void
 am3_conti_free(Am3_conti *conti);
 
 Am3_func *
-am3_conti_get_func(Am3_word word, const Am3_conti *conti);
+am3_conti_get_func(const Am3_conti *conti, Am3_word word);
 
 int
-am3_conti_apply_word(Am3_word word, Am3_conti *conti);
+am3_conti_apply_clos(Am3_conti *conti, const Am3_func *func);
+
+int
+am3_conti_apply_conti(Am3_conti *des, const Am3_conti *src);
+
+int
+am3_conti_apply_word(Am3_conti *conti, Am3_word word);
 
 /* func */
 
@@ -79,16 +85,16 @@ void
 am3_func_release(Am3_func *func);
 
 Am3_func *
-am3_func_get_func(Am3_word word, const Am3_func *func);
+am3_func_get_func(const Am3_func *func, Am3_word word);
 
 /* other */
 
 int
-am3_word_write(Am3_word word, Nit_gap *gap);
+am3_word_write(Nit_gap *gap, Am3_word word);
 
 void
 am3_print_stack(Nit_gap *stack);
 
 Am3_func *
-am3_dict_get(Am3_word word, const Nit_hmap *map);
+am3_dict_get(const Nit_hmap *map, Am3_word word);
 
