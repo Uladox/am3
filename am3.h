@@ -69,7 +69,7 @@ void
 am3_clos_free(Am3_clos *clos);
 
 Am3_func *
-am3_clos_get_func(const Am3_clos *clos, Am3_word word)
+am3_clos_get_func(const Am3_clos *clos, Am3_word word);
 
 /* conti */
 
