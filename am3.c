@@ -13,16 +13,54 @@
 
 #include "am3.h"
 
+#define DEFAULT_ENV_SEQUENCE 0
+#define DEFAULT_CLOS_CODE_SIZE  16
 #define DEFAULT_CONTI_CODE_SIZE 1024
 #define DEFAULT_CONTI_DATA_SIZE 1024
-#define DEFAULT_ENV_SEQUENCE 0
+
+/* dict */
 
 static int
 func_hmap_compare(const void *entry_key, uint32_t entry_key_size,
-		  const void *key, uint32_t key_size);
+		  const void *key, uint32_t key_size)
+{
+	(void) entry_key_size;
+	(void) key_size;
+
+	return *(Am3_word *) entry_key == *(Am3_word *) key;
+}
 
 static void
-func_hmap_free(void *key, void *storage);
+func_hmap_free(void *key, void *storage)
+{
+	free(key);
+	am3_func_release(storage);
+}
+
+Nit_hmap *
+am3_dict_new(void)
+{
+	return hmap_new(DEFAULT_ENV_SEQUENCE,
+			func_hmap_compare, func_hmap_free);
+}
+
+void
+am3_dict_free(Nit_hmap *dict)
+{
+	hmap_free(dict);
+}
+
+const char *
+am3_dict_add(Nit_hmap *map, Am3_word word, Am3_func *func)
+{
+	return hmap_add(map, &word, sizeof(word), func);
+}
+
+Am3_func *
+am3_dict_get(const Nit_hmap *map, Am3_word word)
+{
+	return hmap_get(map, &word, sizeof(word));
+}
 
 /* env */
 
@@ -32,9 +70,7 @@ am3_env_new(Am3_env *up)
 	Am3_env *env = palloc(env);
 
 	pcheck(env, NULL);
-	env->dict = hmap_new(DEFAULT_ENV_SEQUENCE,
-			    func_hmap_compare, func_hmap_free);
-	pcheck_c(env->dict, NULL, free(env));
+	pcheck_c((env->dict = am3_dict_new()), NULL, free(env));
 	env->up = up;
 	env->refs = 1;
 
@@ -48,7 +84,7 @@ am3_env_release(Am3_env *env)
 	if (!env || --env->refs)
 		return;
 
-	hmap_free(env->dict);
+	am3_dict_free(env->dict);
 	am3_env_release(env->up);
 }
 
@@ -58,7 +94,30 @@ am3_env_get_func(const Am3_env *env, Am3_word word)
 	return am3_dict_get(env->dict, word);
 }
 
+const char *
+am3_env_add_func(Am3_env *env, Am3_word word, Am3_func *func)
+{
+	return am3_dict_add(env->dict, word, func);
+}
+
 /* clos */
+
+Am3_clos *
+am3_clos_new(Am3_env *env)
+{
+	Am3_clos *clos = palloc(clos);
+
+	pcheck(clos, NULL);
+
+        if (gap_init(&clos->words, DEFAULT_CLOS_CODE_SIZE)) {
+		free(clos);
+		return NULL;
+	}
+
+	++(clos->env = env)->refs;
+
+	return clos;
+}
 
 void
 am3_clos_free(Am3_clos *clos)
@@ -120,7 +179,7 @@ am3_elist_copy(const Am3_elist *elist)
 }
 
 Am3_conti *
-am3_conti_new(Am3_env *env)
+am3_conti_new(const Am3_elist *elist)
 {
 	Am3_conti *conti = palloc(conti);
 
@@ -137,15 +196,22 @@ am3_conti_new(Am3_env *env)
 		return NULL;
 	}
 
-	pcheck_c((conti->elist = palloc(conti->elist)), NULL,
-		 (gap_dispose(&conti->data),
-		  gap_dispose(&conti->code), free(conti)));
+	if (!elist) {
+		pcheck_c((conti->elist = palloc(conti->elist)), NULL,
+			 (gap_dispose(&conti->data), gap_dispose(&conti->code),
+			  free(conti)));
+		pcheck_c((conti->elist->env = am3_env_new(NULL)), NULL,
+			 (gap_dispose(&conti->data),  gap_dispose(&conti->code),
+			  free(conti->elist), free(conti)));
 
-	conti->elist->env = env;
-	LIST_CONS(conti->elist, NULL);
+		LIST_CONS(conti->elist, NULL);
 
-	if (env)
-		++env->refs;
+		return conti;
+	}
+
+	pcheck_c((conti->elist = am3_elist_copy(elist)), NULL,
+		 (gap_dispose(&conti->data), gap_dispose(&conti->code),
+		  free(conti)));
 
 	return conti;
 }
@@ -174,6 +240,12 @@ am3_conti_get_func(const Am3_conti *conti, Am3_word word)
 				return value;
 
 	return value;
+}
+
+const char *
+am3_conti_add_func(Am3_conti *conti, Am3_word word, Am3_func *func)
+{
+	return am3_env_add_func(conti->elist->env, word, func);
 }
 
 int
@@ -211,12 +283,42 @@ am3_conti_apply_conti(Am3_conti *des, const Am3_conti *src)
 	return 0;
 }
 
+Am3_conti *
+am3_conti_copy(const Am3_conti *src)
+{
+	Am3_conti *des = palloc(des);
+
+	pcheck(des, NULL);
+
+	if (gap_clone(&des->code, &src->code)) {
+		free(des);
+		return NULL;
+	}
+
+	if (gap_clone(&des->data, &src->data)) {
+		gap_dispose(&des->code);
+		free(des);
+		return NULL;
+	}
+
+	if (!(des->elist = am3_elist_copy(src->elist))) {
+		gap_dispose(&des->data);
+		gap_dispose(&des->code);
+		free(des);
+		return NULL;
+	}
+
+	return des;
+}
+
 int
 am3_conti_apply_word(Am3_conti *conti, Am3_word word)
 {
 
+	/* tmp vals */
 	Am3_func *func;
 	Am3_elist *elist;
+	Am3_word word2;
 
 	switch (word) {
 	case AM3_FUNC_END:
@@ -226,8 +328,25 @@ am3_conti_apply_word(Am3_conti *conti, Am3_word word)
 		free(elist);
 		return 0;
 	case AM3_STACK_PRINT:
-		am3_print_stack(&conti->data);
+		am3_stack_print(&conti->data);
 		return 0;
+	case AM3_COPY_CONTI:
+		if ((word2 = am3_stack_pop(&conti->data)) == AM3_STACK_ERROR)
+			return 1;
+
+		pcheck((func = am3_func_copy_conti(conti)), 1);
+
+		if (am3_conti_add_func(conti, word2, func))
+			return 1;
+
+		return 0;
+	case AM3_APPLY_CONTI:
+		if ((word2 = am3_stack_pop(&conti->data)) == AM3_STACK_ERROR)
+			return 1;
+
+		pcheck((func = am3_conti_get_func(conti, word2)), 1);
+
+		return am3_conti_apply_conti(conti, func->val.conti);
 	}
 
 	pcheck((func = am3_conti_get_func(conti, word)), 1);
@@ -246,25 +365,50 @@ am3_conti_apply_word(Am3_conti *conti, Am3_word word)
 
 /* func */
 
-static int
-func_hmap_compare(const void *entry_key, uint32_t entry_key_size,
-		  const void *key, uint32_t key_size)
+Am3_func *
+am3_func_new_clos(Am3_env *env)
 {
-	(void) entry_key_size;
-	(void) key_size;
+	Am3_func *func = palloc(func);
 
-	return *(Am3_word *) entry_key == *(Am3_word *) key;
+	pcheck(func, NULL);
+	pcheck_c((func->val.clos = am3_clos_new(env)),
+		 NULL, free(func));
+
+	func->type = AM3_CLOS;
+	++func->refs;
+
+	return func;
 }
 
-static void
-func_hmap_free(void *key, void *storage)
+Am3_func *
+am3_func_new_conti(const Am3_elist *elist)
 {
-	free(key);
-	am3_func_release(storage);
+	Am3_func *func = palloc(func);
+
+	pcheck(func, NULL);
+	pcheck_c((func->val.conti = am3_conti_new(elist)),
+		 NULL, free(func));
+
+	func->type = AM3_CONTI;
+	++func->refs;
+
+	return func;
 }
 
-/* Am3_func * */
-/* am3_func_new_clos() */
+Am3_func *
+am3_func_copy_conti(const Am3_conti *conti)
+{
+	Am3_func *func = palloc(func);
+
+	pcheck(func, NULL);
+	pcheck_c((func->val.conti = am3_conti_copy(conti)),
+		 NULL, free(func));
+
+	func->type = AM3_CONTI;
+	++func->refs;
+
+	return func;
+}
 
 void
 am3_func_release(Am3_func *func)
@@ -300,16 +444,30 @@ am3_func_get_func(const Am3_func *func, Am3_word word)
 
 	return NULL;
 }
-
-/* other */
+/* stack */
 int
-am3_word_write(Nit_gap *gap, Am3_word word)
+am3_stack_push(Nit_gap *gap, Am3_word word)
 {
-	return gap_write(gap, &word, sizeof(word));
+	return am3_word_write(gap, word);
+}
+
+Am3_word
+am3_stack_pop(Nit_gap *gap)
+{
+	Am3_word word;
+
+	if (gap_copy_b(gap, &word, sizeof(word)))
+		return AM3_STACK_ERROR;
+
+/* fix this */
+
+	gap_move_b(gap, sizeof(word) * 2 + 1);
+
+	return word;
 }
 
 void
-am3_print_stack(Nit_gap *stack)
+am3_stack_print(const Nit_gap *stack)
 {
 	int count = 0;
 	int val = stack->start / sizeof(Am3_word);
@@ -328,8 +486,10 @@ am3_print_stack(Nit_gap *stack)
 	printf("}\n");
 }
 
-Am3_func *
-am3_dict_get(const Nit_hmap *map, Am3_word word)
+/* other */
+int
+am3_word_write(Nit_gap *gap, Am3_word word)
 {
-	return hmap_get(map, &word, sizeof(word));
+	return gap_write(gap, &word, sizeof(word));
 }
+

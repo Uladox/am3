@@ -9,9 +9,12 @@
 typedef uint32_t Am3_word;
 
 enum am3_opcodes {
+	AM3_STACK_ERROR = 0,
 	AM3_STACK_BOTTOM,
 	AM3_FUNC_END,
-	AM3_STACK_PRINT
+	AM3_STACK_PRINT,
+	AM3_COPY_CONTI,
+	AM3_APPLY_CONTI
 };
 
 typedef struct am3_env {
@@ -52,6 +55,20 @@ typedef struct am3_func {
 	} val;
 } Am3_func;
 
+/* dict */
+
+Nit_hmap *
+am3_dict_new(void);
+
+const char *
+am3_dict_add(Nit_hmap *map, Am3_word word, Am3_func *func);
+
+Am3_func *
+am3_dict_get(const Nit_hmap *map, Am3_word word);
+
+void
+am3_dict_free(Nit_hmap *dict);
+
 /* env */
 
 Am3_env *
@@ -74,7 +91,7 @@ am3_clos_get_func(const Am3_clos *clos, Am3_word word);
 /* conti */
 
 Am3_conti *
-am3_conti_new(Am3_env *env);
+am3_conti_new(const Am3_elist *elist);
 
 void
 am3_conti_free(Am3_conti *conti);
@@ -93,20 +110,36 @@ am3_conti_apply_word(Am3_conti *conti, Am3_word word);
 
 /* func */
 
+Am3_func *
+am3_func_new_clos(Am3_env *env);
+
+Am3_func *
+am3_func_new_conti(const Am3_elist *elist);
+
+Am3_func *
+am3_func_copy_conti(const Am3_conti *conti);
+
 void
 am3_func_release(Am3_func *func);
 
 Am3_func *
 am3_func_get_func(const Am3_func *func, Am3_word word);
 
+/* stack */
+
+int
+am3_stack_push(Nit_gap *gap, Am3_word word);
+
+Am3_word
+am3_stack_pop(Nit_gap *gap);
+
+void
+am3_stack_print(const Nit_gap *stack);
+
 /* other */
 
 int
 am3_word_write(Nit_gap *gap, Am3_word word);
 
-void
-am3_print_stack(Nit_gap *stack);
 
-Am3_func *
-am3_dict_get(const Nit_hmap *map, Am3_word word);
 
