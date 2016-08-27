@@ -17,7 +17,10 @@ main(int argc, char *argv[])
 	am3_word_write(&conti->data, 123456);
 	am3_word_write(&conti->data, 123456);
 	am3_conti_apply_word(conti, AM3_STACK_PRINT);
-	am3_conti_apply_word(conti, AM3_COPY_CONTI);
+
+	am3_stack_pop(&conti->data);
+
+	/* am3_conti_apply_word(conti, AM3_COPY_CONTI); */
 	am3_conti_apply_word(conti, AM3_STACK_PRINT);
 	am3_conti_free(conti);
 }

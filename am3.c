@@ -86,6 +86,7 @@ am3_env_release(Am3_env *env)
 
 	am3_dict_free(env->dict);
 	am3_env_release(env->up);
+	free(env);
 }
 
 Am3_func *
@@ -456,12 +457,8 @@ am3_stack_pop(Nit_gap *gap)
 {
 	Am3_word word;
 
-	if (gap_copy_b(gap, &word, sizeof(word)))
+	if (gap_cut_b(gap, &word, sizeof(word)))
 		return AM3_STACK_ERROR;
-
-/* fix this */
-
-	gap_move_b(gap, sizeof(word) * 2 + 1);
 
 	return word;
 }
@@ -469,19 +466,21 @@ am3_stack_pop(Nit_gap *gap)
 void
 am3_stack_print(const Nit_gap *stack)
 {
+	const Am3_word *words = (Am3_word *) stack->bytes;
 	int count = 0;
 	int val = stack->start / sizeof(Am3_word);
 
 	printf("#stack{ ");
 
 	for (; count < val; ++count)
-		printf("[%" PRIu32 "] ", ((Am3_word *) stack->bytes)[count]);
+		printf("[%" PRIu32 "] ", words[count]);
 
-	count = stack->end + 1;
-	val = stack->size;
+	words += (stack->end + 1) / sizeof(Am3_word);
+	count = 0;
+	val = (stack->size - stack->end - 1) / sizeof(Am3_word);
 
 	for (; count < val; ++count)
-		printf("[%" PRIu32 "] ", ((Am3_word *) stack->bytes)[count]);
+		printf("[%" PRIu32 "] ", words[count]);
 
 	printf("}\n");
 }

@@ -30,3 +30,5 @@ uninstall:
 
 clean:
 	rm -f $(LIB) $(OBJ)
+test: test.c libam3.a
+	gcc -g -o test test.c libam3.a -lnit
