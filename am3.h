@@ -125,6 +125,9 @@ am3_func_release(Am3_func *func);
 Am3_func *
 am3_func_get_func(const Am3_func *func, Am3_word word);
 
+void
+am3_func_print(const Am3_func *func);
+
 /* stack */
 
 int

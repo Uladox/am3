@@ -50,10 +50,19 @@ am3_dict_free(Nit_hmap *dict)
 	hmap_free(dict);
 }
 
+
+/* remove this later */
+const char *error = "error";
+
 const char *
 am3_dict_add(Nit_hmap *map, Am3_word word, Am3_func *func)
 {
-	return hmap_add(map, &word, sizeof(word), func);
+	Am3_word *copy = palloc(copy);
+
+	pcheck(copy, error);
+	*copy = word;
+
+	return hmap_add(map, copy, sizeof(word), func);
 }
 
 Am3_func *
@@ -146,13 +155,6 @@ am3_elist_free(Am3_elist *elist)
 		free(tmp);
 	}
 }
-
-/* static void */
-/* am3_elist_inc_refs(Am3_elist *elist) */
-/* { */
-/* 	foreach (elist) */
-/* 		++elist->env->refs; */
-/* } */
 
 static Am3_elist *
 am3_elist_copy(const Am3_elist *elist)
@@ -406,7 +408,7 @@ am3_func_copy_conti(const Am3_conti *conti)
 		 NULL, free(func));
 
 	func->type = AM3_CONTI;
-	++func->refs;
+	func->refs = 1;
 
 	return func;
 }
@@ -445,6 +447,33 @@ am3_func_get_func(const Am3_func *func, Am3_word word)
 
 	return NULL;
 }
+
+void
+am3_func_print(const Am3_func *func)
+{
+	printf("(func ");
+
+	if (!func) {
+		printf("nil)\n");
+		return;
+	}
+
+	printf("(type ");
+	switch (func->type) {
+	case AM3_PRIM:
+		printf("prim");
+		break;
+	case AM3_CLOS:
+		printf("clos");
+		break;
+	case AM3_CONTI:
+		printf("conti");
+		break;
+	}
+
+	printf(") (refs %i))\n", func->refs);
+}
+
 /* stack */
 int
 am3_stack_push(Nit_gap *gap, Am3_word word)
@@ -470,19 +499,19 @@ am3_stack_print(const Nit_gap *stack)
 	int count = 0;
 	int val = stack->start / sizeof(Am3_word);
 
-	printf("#stack{ ");
+	printf("(stack");
 
 	for (; count < val; ++count)
-		printf("[%" PRIu32 "] ", words[count]);
+		printf(" [%" PRIu32 "]", words[count]);
 
 	words += (stack->end + 1) / sizeof(Am3_word);
 	count = 0;
 	val = (stack->size - stack->end - 1) / sizeof(Am3_word);
 
 	for (; count < val; ++count)
-		printf("[%" PRIu32 "] ", words[count]);
+		printf(" [%" PRIu32 "]", words[count]);
 
-	printf("}\n");
+	printf(")\n");
 }
 
 /* other */
