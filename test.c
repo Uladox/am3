@@ -17,9 +17,23 @@ main(int argc, char *argv[])
 
 	am3_word_write(&conti->data, word);
 	am3_word_write(&conti->data, word);
-	am3_conti_apply_word(conti, AM3_STACK_PRINT);
-	am3_conti_apply_word(conti, AM3_COPY_CONTI);
-	am3_func_print(am3_conti_get_func(conti, word));
-	am3_conti_apply_word(conti, AM3_STACK_PRINT);
+	am3_word_write(&conti->code, AM3_APPLY_CONTI);
+	am3_word_write(&conti->code, AM3_STACK_PRINT);
+	am3_word_write(&conti->code, AM3_COPY_CONTI);
+	while (1) {
+		am3_conit_eval_1(conti);
+	}
+
+	/* am3_word_write(&conti->data, word); */
+	/* am3_conti_apply_word(conti, AM3_STACK_PRINT); */
+	/* am3_conti_apply_word(conti, AM3_COPY_CONTI); */
+	/* am3_func_print(am3_conti_get_func(conti, word)); */
+	/* am3_conti_apply_word(conti, AM3_STACK_PRINT); */
+
+	/* am3_word_write(&conti->data, 21341); */
+	/* am3_conti_apply_word(conti, AM3_STACK_PRINT); */
+
+	/* am3_conti_apply_word(conti, AM3_APPLY_CONTI); */
+	/* am3_conti_apply_word(conti, AM3_STACK_PRINT); */
 	am3_conti_free(conti);
 }

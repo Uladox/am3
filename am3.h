@@ -108,6 +108,9 @@ am3_conti_apply_conti(Am3_conti *des, const Am3_conti *src);
 int
 am3_conti_apply_word(Am3_conti *conti, Am3_word word);
 
+int
+am3_conit_eval_1(Am3_conti *conti);
+
 /* func */
 
 Am3_func *
@@ -135,6 +138,9 @@ am3_stack_push(Nit_gap *gap, Am3_word word);
 
 Am3_word
 am3_stack_pop(Nit_gap *gap);
+
+Am3_word
+am3_stack_next(Nit_gap *gap);
 
 void
 am3_stack_print(const Nit_gap *stack);

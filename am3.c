@@ -62,6 +62,8 @@ am3_dict_add(Nit_hmap *map, Am3_word word, Am3_func *func)
 	pcheck(copy, error);
 	*copy = word;
 
+	hmap_remove(map, &word, sizeof(word));
+
 	return hmap_add(map, copy, sizeof(word), func);
 }
 
@@ -366,6 +368,17 @@ am3_conti_apply_word(Am3_conti *conti, Am3_word word)
 	return 1;
 }
 
+int
+am3_conit_eval_1(Am3_conti *conti)
+{
+	Am3_word word;
+
+	if ((word = am3_stack_next(&conti->code)) == AM3_STACK_ERROR)
+		return 1;
+
+	return am3_conti_apply_word(conti, word);
+}
+
 /* func */
 
 Am3_func *
@@ -492,6 +505,17 @@ am3_stack_pop(Nit_gap *gap)
 	return word;
 }
 
+Am3_word
+am3_stack_next(Nit_gap *gap)
+{
+	Am3_word word;
+
+	if (gap_prev(gap, &word, sizeof(word)))
+		return AM3_STACK_ERROR;
+
+	return word;
+}
+
 void
 am3_stack_print(const Nit_gap *stack)
 {
@@ -503,6 +527,8 @@ am3_stack_print(const Nit_gap *stack)
 
 	for (; count < val; ++count)
 		printf(" [%" PRIu32 "]", words[count]);
+
+	printf(" @c");
 
 	words += (stack->end + 1) / sizeof(Am3_word);
 	count = 0;
